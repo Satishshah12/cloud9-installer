@@ -6,7 +6,7 @@ clear
 
 echo "=============================================="
 echo "          VIPER CLOUD9 IDE INSTALLER"
-echo "          Ubuntu 22.04 Edition"
+echo "          Ubuntu 22.04 / 24.04 Edition"
 echo "=============================================="
 echo ""
 
@@ -15,7 +15,8 @@ echo ""
 ############################################
 
 if [ "$EUID" -ne 0 ]; then
-    echo "ERROR: Please run as root"
+    echo "ERROR: Please run this installer as root"
+    echo ""
     echo "Example:"
     echo "curl -fsSL URL | sudo bash"
     exit 1
@@ -23,22 +24,30 @@ fi
 
 
 ############################################
-# CHECK UBUNTU
+# DETECT UBUNTU
 ############################################
 
 UBUNTU_VERSION=$(lsb_release -rs)
 
 echo "Detected Ubuntu: $UBUNTU_VERSION"
 
-if [[ "$UBUNTU_VERSION" != "22.04" ]]; then
+
+if [[ "$UBUNTU_VERSION" != "22.04" && "$UBUNTU_VERSION" != "24.04" ]]; then
+
     echo ""
-    echo "WARNING: This installer is optimized for Ubuntu 22.04"
+    echo "ERROR: Unsupported Ubuntu version"
+    echo "Supported:"
+    echo "- Ubuntu 22.04"
+    echo "- Ubuntu 24.04"
     echo ""
+    exit 1
+
 fi
 
 
+
 ############################################
-# CONFIG
+# CONFIGURATION
 ############################################
 
 CONTAINER_NAME="cloud9"
@@ -49,24 +58,43 @@ TIMEZONE="Asia/Jakarta"
 PASSWORD=$(openssl rand -base64 12)
 
 
+
 ############################################
-# SYSTEM UPDATE
+# CLEAN OLD REPOSITORY
 ############################################
 
 echo ""
-echo "[1/10] Updating system..."
+echo "[1/12] Cleaning old repository..."
+
+
+rm -f /etc/apt/sources.list.d/docker.list
+rm -f /etc/apt/sources.list.d/docker-ce.list
+rm -f /etc/apt/sources.list.d/nodesource.list
+
 
 apt update -y
+
+
+
+############################################
+# UPDATE SYSTEM
+############################################
+
+echo ""
+echo "[2/12] Updating system..."
+
+
 apt upgrade -y
 
 
 
 ############################################
-# INSTALL DEPENDENCIES
+# INSTALL BASIC PACKAGE
 ############################################
 
 echo ""
-echo "[2/10] Installing dependencies..."
+echo "[3/12] Installing dependencies..."
+
 
 apt install -y \
 curl \
@@ -75,8 +103,11 @@ git \
 zip \
 unzip \
 openssl \
+ca-certificates \
+gnupg \
+lsb-release \
 ufw \
-ca-certificates
+iptables
 
 
 
@@ -85,7 +116,8 @@ ca-certificates
 ############################################
 
 echo ""
-echo "[3/10] Opening port ${PORT}"
+echo "[4/12] Opening port ${PORT}..."
+
 
 ufw allow ${PORT}/tcp || true
 
@@ -94,11 +126,11 @@ iptables -I INPUT -p tcp --dport ${PORT} -j ACCEPT || true
 
 
 ############################################
-# DOCKER INSTALL
+# INSTALL DOCKER
 ############################################
 
 echo ""
-echo "[4/10] Installing Docker"
+echo "[5/12] Installing Docker..."
 
 
 if ! command -v docker >/dev/null 2>&1
@@ -115,11 +147,11 @@ systemctl start docker
 
 
 ############################################
-# WORKSPACE
+# CREATE WORKSPACE
 ############################################
 
 echo ""
-echo "[5/10] Creating workspace"
+echo "[6/12] Creating workspace..."
 
 
 mkdir -p ${WORKSPACE}
@@ -127,11 +159,11 @@ mkdir -p ${WORKSPACE}
 
 
 ############################################
-# REMOVE OLD
+# REMOVE OLD CLOUD9
 ############################################
 
 echo ""
-echo "[6/10] Preparing Cloud9"
+echo "[7/12] Removing old Cloud9 container..."
 
 
 docker rm -f ${CONTAINER_NAME} >/dev/null 2>&1 || true
@@ -143,7 +175,7 @@ docker rm -f ${CONTAINER_NAME} >/dev/null 2>&1 || true
 ############################################
 
 echo ""
-echo "[7/10] Starting Cloud9 IDE"
+echo "[8/12] Installing Cloud9 IDE..."
 
 
 docker pull lscr.io/linuxserver/cloud9:latest
@@ -164,11 +196,11 @@ lscr.io/linuxserver/cloud9:latest
 
 
 ############################################
-# INSTALL DEV TOOLS
+# INSTALL DEVELOPMENT TOOLS
 ############################################
 
 echo ""
-echo "[8/10] Installing Development Environment"
+echo "[9/12] Installing PHP Python Git..."
 
 
 sleep 15
@@ -179,13 +211,13 @@ docker exec ${CONTAINER_NAME} bash -c "
 apt update -y
 
 apt install -y \
-php8.1 \
-php8.1-cli \
-php8.1-curl \
-php8.1-mbstring \
-php8.1-xml \
-php8.1-zip \
-php8.1-mysql \
+php \
+php-cli \
+php-curl \
+php-mbstring \
+php-xml \
+php-zip \
+php-mysql \
 python3 \
 python3-pip \
 git \
@@ -203,7 +235,7 @@ unzip
 ############################################
 
 echo ""
-echo "[9/10] Installing Node.js 22"
+echo "[10/12] Installing Node.js 22..."
 
 
 docker exec ${CONTAINER_NAME} bash -c "
@@ -221,7 +253,7 @@ apt install -y nodejs
 ############################################
 
 echo ""
-echo "[10/10] Installing Composer"
+echo "[11/12] Installing Composer..."
 
 
 docker exec ${CONTAINER_NAME} bash -c "
@@ -239,38 +271,51 @@ rm composer-setup.php
 
 
 ############################################
-# RESULT
+# FINAL
 ############################################
 
-IP=$(curl -4 -s ifconfig.me)
+echo ""
+echo "[12/12] Finishing installation..."
+
+
+SERVER_IP=$(curl -4 -s ifconfig.me || hostname -I | awk '{print $1}')
+
 
 
 echo ""
 echo "=============================================="
-echo "        VIPER CLOUD9 READY"
+echo "        VIPER CLOUD9 INSTALL SUCCESS"
 echo "=============================================="
 echo ""
 
-echo "URL:"
+echo "Cloud9 URL:"
 echo ""
-echo "http://${IP}:${PORT}"
+echo "http://${SERVER_IP}:${PORT}"
 
 echo ""
 
-echo "PASSWORD:"
+echo "Password:"
 echo ""
 echo "${PASSWORD}"
 
 echo ""
 
-echo "WORKSPACE:"
+echo "Workspace:"
 echo ""
 echo "${WORKSPACE}"
 
 echo ""
 
-echo "CONTAINER:"
+echo "Ubuntu:"
+echo "${UBUNTU_VERSION}"
+
+echo ""
+
+echo "Container:"
 echo "${CONTAINER_NAME}"
 
 echo ""
+
+echo "=============================================="
+echo "      READY FOR DEVELOPMENT"
 echo "=============================================="
