@@ -2,6 +2,8 @@
 
 set -e
 
+export DEBIAN_FRONTEND=noninteractive
+
 clear
 
 echo "=============================================="
@@ -9,6 +11,7 @@ echo "          VIPER CLOUD9 IDE INSTALLER"
 echo "          Ubuntu 22.04 / 24.04 Edition"
 echo "=============================================="
 echo ""
+
 
 ############################################
 # ROOT CHECK
@@ -23,13 +26,14 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 
+
 ############################################
 # DETECT UBUNTU
 ############################################
 
 UBUNTU_VERSION=$(lsb_release -rs)
 
-echo "Detected Ubuntu: $UBUNTU_VERSION"
+echo "Detected Host Ubuntu: $UBUNTU_VERSION"
 
 
 if [[ "$UBUNTU_VERSION" != "22.04" && "$UBUNTU_VERSION" != "24.04" ]]; then
@@ -37,9 +41,8 @@ if [[ "$UBUNTU_VERSION" != "22.04" && "$UBUNTU_VERSION" != "24.04" ]]; then
     echo ""
     echo "ERROR: Unsupported Ubuntu version"
     echo "Supported:"
-    echo "- Ubuntu 22.04"
-    echo "- Ubuntu 24.04"
-    echo ""
+    echo "Ubuntu 22.04"
+    echo "Ubuntu 24.04"
     exit 1
 
 fi
@@ -89,7 +92,7 @@ apt upgrade -y
 
 
 ############################################
-# INSTALL BASIC PACKAGE
+# BASIC PACKAGE
 ############################################
 
 echo ""
@@ -116,7 +119,7 @@ iptables
 ############################################
 
 echo ""
-echo "[4/12] Opening port ${PORT}..."
+echo "[4/12] Opening port ${PORT}"
 
 
 ufw allow ${PORT}/tcp || true
@@ -126,7 +129,7 @@ iptables -I INPUT -p tcp --dport ${PORT} -j ACCEPT || true
 
 
 ############################################
-# INSTALL DOCKER
+# DOCKER
 ############################################
 
 echo ""
@@ -147,7 +150,7 @@ systemctl start docker
 
 
 ############################################
-# CREATE WORKSPACE
+# WORKSPACE
 ############################################
 
 echo ""
@@ -196,17 +199,40 @@ lscr.io/linuxserver/cloud9:latest
 
 
 ############################################
-# INSTALL DEVELOPMENT TOOLS
+# WAIT CLOUD9
+############################################
+
+echo ""
+echo "Waiting Cloud9 container..."
+
+
+sleep 20
+
+
+if ! docker ps | grep ${CONTAINER_NAME} >/dev/null
+then
+
+echo "Cloud9 failed to start"
+
+docker logs ${CONTAINER_NAME}
+
+exit 1
+
+fi
+
+
+
+############################################
+# DEVELOPMENT TOOLS
 ############################################
 
 echo ""
 echo "[9/12] Installing PHP Python Git..."
 
 
-sleep 15
-
-
 docker exec ${CONTAINER_NAME} bash -c "
+
+export DEBIAN_FRONTEND=noninteractive
 
 apt update -y
 
@@ -231,18 +257,24 @@ unzip
 
 
 ############################################
-# NODE JS 22
+# NODE JS 18
 ############################################
 
 echo ""
-echo "[10/12] Installing Node.js 22..."
+echo "[10/12] Installing Node.js 18..."
 
 
 docker exec ${CONTAINER_NAME} bash -c "
 
-curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+rm -f /etc/apt/sources.list.d/nodesource.list
+
+curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
 
 apt install -y nodejs
+
+node -v
+
+npm -v
 
 "
 
@@ -265,6 +297,8 @@ php composer-setup.php \
 --filename=composer
 
 rm composer-setup.php
+
+composer --version
 
 "
 
@@ -306,8 +340,13 @@ echo "${WORKSPACE}"
 
 echo ""
 
-echo "Ubuntu:"
+echo "Host Ubuntu:"
 echo "${UBUNTU_VERSION}"
+
+echo ""
+
+echo "Node:"
+echo "Node.js 18"
 
 echo ""
 
@@ -315,7 +354,6 @@ echo "Container:"
 echo "${CONTAINER_NAME}"
 
 echo ""
-
 echo "=============================================="
 echo "      READY FOR DEVELOPMENT"
 echo "=============================================="
