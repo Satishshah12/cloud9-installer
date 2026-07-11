@@ -257,7 +257,7 @@ unzip
 
 
 ############################################
-# NODE JS 18
+# NODE JS 18 BINARY INSTALL
 ############################################
 
 echo ""
@@ -266,15 +266,24 @@ echo "[10/12] Installing Node.js 18..."
 
 docker exec ${CONTAINER_NAME} bash -c "
 
-rm -f /etc/apt/sources.list.d/nodesource.list
+cd /tmp
 
-curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+curl -fsSL https://nodejs.org/dist/v18.20.8/node-v18.20.8-linux-x64.tar.xz -o node.tar.xz
 
-apt install -y nodejs
+tar -xf node.tar.xz
+
+mv node-v18.20.8-linux-x64 /opt/nodejs
+
+ln -sf /opt/nodejs/bin/node /usr/local/bin/node
+ln -sf /opt/nodejs/bin/npm /usr/local/bin/npm
+ln -sf /opt/nodejs/bin/npx /usr/local/bin/npx
+
 
 node -v
 
 npm -v
+
+rm node.tar.xz
 
 "
 
