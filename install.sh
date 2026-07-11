@@ -6,22 +6,26 @@ clear
 
 echo "=============================================="
 echo "          VIPER CLOUD9 IDE INSTALLER"
+echo "          Universal Ubuntu Edition"
 echo "=============================================="
 echo ""
 
-# Check root
+
+############################################
+# ROOT CHECK
+############################################
 
 if [ "$EUID" -ne 0 ]; then
     echo "ERROR: Please run this installer as root."
     echo ""
     echo "Example:"
-    echo "sudo bash install.sh"
+    echo "curl -fsSL URL | sudo bash"
     exit 1
 fi
 
 
 ############################################
-# CONFIGURATION
+# CONFIG
 ############################################
 
 CLOUD9_NAME="cloud9"
@@ -30,11 +34,39 @@ WORKSPACE="/root/workspace"
 TIMEZONE="Asia/Jakarta"
 
 
+
+############################################
+# DETECT UBUNTU
+############################################
+
+echo "[INFO] Detecting Ubuntu version..."
+
+UBUNTU_VERSION=$(lsb_release -rs)
+
+echo "Ubuntu Version: $UBUNTU_VERSION"
+
+
+if [[ "$UBUNTU_VERSION" == "18.04" ]]; then
+
+    NODE_VERSION="18"
+
+else
+
+    NODE_VERSION="22"
+
+fi
+
+
+echo "Node.js Version: $NODE_VERSION"
+
+
+
 ############################################
 # UPDATE SYSTEM
 ############################################
 
-echo "[1/9] Updating Ubuntu system..."
+echo ""
+echo "[1/10] Updating system..."
 
 apt-get update -y
 apt-get upgrade -y
@@ -42,10 +74,11 @@ apt-get upgrade -y
 
 
 ############################################
-# INSTALL BASIC PACKAGE
+# BASIC PACKAGE
 ############################################
 
-echo "[2/9] Installing required packages..."
+echo ""
+echo "[2/10] Installing dependencies..."
 
 apt-get install -y \
 curl \
@@ -55,7 +88,8 @@ zip \
 unzip \
 openssl \
 ufw \
-iptables
+iptables \
+lsb-release
 
 
 
@@ -63,7 +97,8 @@ iptables
 # FIREWALL
 ############################################
 
-echo "[3/9] Opening Cloud9 port..."
+echo ""
+echo "[3/10] Opening port $CLOUD9_PORT..."
 
 if command -v ufw >/dev/null 2>&1
 then
@@ -76,10 +111,12 @@ iptables -I INPUT -p tcp --dport ${CLOUD9_PORT} -j ACCEPT || true
 
 
 ############################################
-# INSTALL DOCKER
+# DOCKER
 ############################################
 
-echo "[4/9] Installing Docker..."
+echo ""
+echo "[4/10] Installing Docker..."
+
 
 if ! command -v docker >/dev/null 2>&1
 then
@@ -95,17 +132,18 @@ systemctl start docker
 
 
 ############################################
-# CREATE WORKSPACE
+# WORKSPACE
 ############################################
 
-echo "[5/9] Creating workspace..."
+echo ""
+echo "[5/10] Creating workspace..."
 
 mkdir -p ${WORKSPACE}
 
 
 
 ############################################
-# PASSWORD GENERATOR
+# PASSWORD
 ############################################
 
 PASSWORD=$(openssl rand -base64 12)
@@ -113,15 +151,18 @@ PASSWORD=$(openssl rand -base64 12)
 
 
 ############################################
-# INSTALL CLOUD9
+# CLOUD9 INSTALL
 ############################################
 
-echo "[6/9] Installing Cloud9 IDE..."
+echo ""
+echo "[6/10] Installing Cloud9 IDE..."
+
 
 docker rm -f ${CLOUD9_NAME} >/dev/null 2>&1 || true
 
 
 docker pull lscr.io/linuxserver/cloud9:latest
+
 
 
 docker run -d \
@@ -138,10 +179,11 @@ lscr.io/linuxserver/cloud9:latest
 
 
 ############################################
-# DEVELOPMENT ENVIRONMENT
+# DEV TOOLS
 ############################################
 
-echo "[7/9] Installing Development Tools..."
+echo ""
+echo "[7/10] Installing PHP Python Git..."
 
 
 sleep 15
@@ -176,11 +218,13 @@ unzip
 # NODE JS
 ############################################
 
-echo "[8/9] Installing Node.js..."
+echo ""
+echo "[8/10] Installing Node.js $NODE_VERSION..."
+
 
 docker exec ${CLOUD9_NAME} bash -c "
 
-curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash -
 
 apt-get install nodejs -y
 
@@ -192,7 +236,8 @@ apt-get install nodejs -y
 # COMPOSER
 ############################################
 
-echo "[9/9] Installing Composer..."
+echo ""
+echo "[9/10] Installing Composer..."
 
 
 docker exec ${CLOUD9_NAME} bash -c "
@@ -210,10 +255,15 @@ rm composer-setup.php
 
 
 ############################################
-# RESULT
+# FINAL CHECK
 ############################################
 
+echo ""
+echo "[10/10] Finishing..."
+
+
 SERVER_IP=$(curl -4 -s ifconfig.me || hostname -I | awk '{print $1}')
+
 
 
 echo ""
@@ -240,10 +290,20 @@ echo "${WORKSPACE}"
 
 echo ""
 
+echo "Ubuntu:"
+echo "${UBUNTU_VERSION}"
+
+echo ""
+
+echo "Node.js:"
+echo "v${NODE_VERSION}"
+
+echo ""
+
 echo "Container:"
 echo "${CLOUD9_NAME}"
 
 echo ""
 echo "=============================================="
-echo "      Enjoy Your Cloud9 Development IDE"
+echo "       READY FOR DEVELOPMENT"
 echo "=============================================="
