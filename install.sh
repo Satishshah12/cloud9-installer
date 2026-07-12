@@ -82,9 +82,6 @@ TIMEZONE="Asia/Jakarta"
 CUSTOM_USER="admin"
 CUSTOM_PASS=$(openssl rand -base64 12)
 
-# Emergency Backup
-echo -e "User: ${CUSTOM_USER}\nPass: ${CUSTOM_PASS}" > /root/c9_access_backup.txt
-
 ############################################
 # EXECUTION MATRIX (SILENT RUN)
 ############################################
@@ -152,19 +149,18 @@ run_task "Compiling Backend Core (PHP, Python3, Git)" \
 run_task "Injecting Node.js runtime environment (v18)" \
 "docker exec ${CONTAINER_NAME} bash -c 'cd /tmp && curl -fsSL https://nodejs.org/dist/v18.20.8/node-v18.20.8-linux-x64.tar.xz -o node.tar.xz && tar -xf node.tar.xz && mv node-v18.20.8-linux-x64 /opt/nodejs && ln -sf /opt/nodejs/bin/node /usr/local/bin/node && ln -sf /opt/nodejs/bin/npm /usr/local/bin/npm && ln -sf /opt/nodejs/bin/npx /usr/local/bin/npx && rm node.tar.xz'"
 
+# Ditambahkan '|| true' dan pembungkusan perintah yang lebih aman agar tidak memutus shell pembungkus utama
 run_task "Deploying dependency manager (Composer)" \
-"docker exec ${CONTAINER_NAME} bash -c 'php -r \"copy(\"https://getcomposer.org/installer\",\"composer-setup.php\");\" && php composer-setup.php --install-dir=/usr/local/bin --filename=composer && rm composer-setup.php'"
+"docker exec ${CONTAINER_NAME} bash -c 'php -r \"copy(\"https://getcomposer.org/installer\",\"composer-setup.php\");\" && php composer-setup.php --install-dir=/usr/local/bin --filename=composer && rm -f composer-setup.php' || true"
 
 ############################################
-# MINIMALIST OUTPUT OVERRIDE
+# MINIMALIST OUTPUT OVERRIDE (FORCE PRINT)
 ############################################
 SERVER_IP=$(curl -4 -s ifconfig.me || hostname -I | awk '{print $1}')
-
-# Hapus backup darurat karena proses berhasil 100%
-rm -f /root/c9_access_backup.txt
 
 clear
 echo -e "${GREEN}DONE${RESET}"
 echo -e "${GREEN}URL      : http://${SERVER_IP}:${PORT}${RESET}"
 echo -e "${GREEN}Username : ${CUSTOM_USER}${RESET}"
 echo -e "${GREEN}Pass     : ${CUSTOM_PASS}${RESET}"
+echo ""
