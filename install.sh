@@ -55,12 +55,11 @@ fi
 
 CONTAINER_NAME="cloud9"
 PORT="8181"
+INTERNAL_PORT="8182"  # Kontainer dipindah ke port internal agar tidak bisa di-bypass lewat IP langsung
 WORKSPACE="/root/workspace"
 TIMEZONE="Asia/Jakarta"
 
-# Silakan ganti username di bawah ini sesuai keinginan
 CUSTOM_USER="admin"
-# Password akan digenerate otomatis secara acak, atau ganti manual di sini jika ingin static
 CUSTOM_PASS=$(openssl rand -base64 12)
 
 
@@ -95,11 +94,11 @@ apt upgrade -y
 
 
 ############################################
-# BASIC PACKAGE
+# BASIC PACKAGE & NGINX
 ############################################
 
 echo ""
-echo "[3/12] Installing dependencies..."
+echo "[3/12] Installing dependencies and Nginx..."
 
 
 apt install -y \
@@ -113,7 +112,9 @@ ca-certificates \
 gnupg \
 lsb-release \
 ufw \
-iptables
+iptables \
+nginx \
+apache2-utils  # Dibutuhkan untuk perintah htpasswd
 
 
 
@@ -165,14 +166,16 @@ mkdir -p ${WORKSPACE}
 
 
 ############################################
-# REMOVE OLD CLOUD9
+# REMOVE OLD CLOUD9 & NGINX CONFIG
 ############################################
 
 echo ""
-echo "[7/12] Removing old Cloud9 container..."
+echo "[7/12] Removing old Cloud9 container and Nginx configs..."
 
 
 docker rm -f ${CONTAINER_NAME} >/dev/null 2>&1 || true
+rm -f /etc/nginx/sites-enabled/cloud9
+rm -f /etc/nginx/sites-available/cloud9
 
 
 
@@ -187,18 +190,62 @@ echo "[8/12] Installing Cloud9 IDE..."
 docker pull lscr.io/linuxserver/cloud9:latest
 
 
-
+# Jalankan kontainer pada 127.0.0.1 agar tidak bisa diakses dari luar kecuali lewat Nginx
 docker run -d \
 --name ${CONTAINER_NAME} \
 -e PUID=0 \
 -e PGID=0 \
 -e TZ=${TIMEZONE} \
--e AUTH_USER=${CUSTOM_USER} \
--e AUTH_PASS=${CUSTOM_PASS} \
--p ${PORT}:8000 \
+-p 127.0.0.1:${INTERNAL_PORT}:8000 \
 -v ${WORKSPACE}:/code \
 --restart unless-stopped \
 lscr.io/linuxserver/cloud9:latest
+
+
+
+############################################
+# CONFIGURING NGINX AUTH PROXY
+############################################
+
+echo ""
+echo "Configuring Nginx Reverse Proxy with Auth..."
+
+# Membuat file password untuk basic-auth Nginx
+mkdir -p /etc/nginx/auth
+htpasswd -b -c /etc/nginx/auth/.cloud9_htpasswd "${CUSTOM_USER}" "${CUSTOM_PASS}"
+
+# Membuat konfigurasi Virtual Host Nginx
+cat << 'EOF' > /etc/nginx/sites-available/cloud9
+server {
+    listen NGINX_PORT;
+    server_name _;
+
+    auth_basic "Restricted Access - Cloud9 IDE";
+    auth_basic_user_file /etc/nginx/auth/.cloud9_htpasswd;
+
+    location / {
+        proxy_pass http://127.0.0.1:INTERNAL_PORT;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Dukungan WebSocket untuk terminal Cloud9
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 86400;
+    }
+}
+EOF
+
+# Mengganti placeholder port di dalam file Nginx
+sed -i "s/NGINX_PORT/${PORT}/g" /etc/nginx/sites-available/cloud9
+sed -i "s/INTERNAL_PORT/${INTERNAL_PORT}/g" /etc/nginx/sites-available/cloud9
+
+# Mengaktifkan konfigurasi dan merestart Nginx
+ln -s /etc/nginx/sites-available/cloud9 /etc/nginx/sites-enabled/
+systemctl restart nginx
 
 
 
@@ -339,7 +386,7 @@ echo "Cloud9 URL:"
 echo "http://${SERVER_IP}:${PORT}"
 echo ""
 
-echo "Login Credentials:"
+echo "Login Credentials (SYSTEM ENFORCED):"
 echo "Username : ${CUSTOM_USER}"
 echo "Password : ${CUSTOM_PASS}"
 echo ""
