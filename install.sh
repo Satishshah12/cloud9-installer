@@ -111,7 +111,6 @@ apt upgrade -y
 
 
 
-
 ############################################
 # INSTALL PACKAGE
 ############################################
@@ -120,40 +119,32 @@ apt upgrade -y
 echo "[3/16] Installing packages"
 
 
-
-apt install -y \
-
-curl \
-
-wget \
-
-git \
-
-zip \
-
-unzip \
-
-nano \
-
-vim \
-
-openssl \
-
-ca-certificates \
-
-nginx \
-
-apache2-utils \
-
-ufw \
-
-python3 \
-
-python3-pip \
-
-net-tools \
-
+PACKAGES="
+curl
+wget
+git
+zip
+unzip
+nano
+vim
+openssl
+ca-certificates
+nginx
+apache2-utils
+ufw
+python3
+python3-pip
+net-tools
 htop
+"
+
+
+for pkg in $PACKAGES
+do
+
+apt install -y $pkg
+
+done
 
 
 
