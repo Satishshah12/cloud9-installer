@@ -6,45 +6,24 @@ export DEBIAN_FRONTEND=noninteractive
 
 clear
 
+
 echo "=============================================="
-echo "          VIPER CLOUD9 IDE INSTALLER"
-echo "          NGINX AUTH EDITION"
+echo "        VIPER CLOUD9 FULL INSTALLER"
+echo "        DEVELOPMENT EDITION"
 echo "=============================================="
-echo ""
+
 
 
 ############################################
 # ROOT CHECK
 ############################################
 
+
 if [ "$EUID" -ne 0 ]; then
 
-echo "ERROR: Please run installer as root"
-echo "Example:"
-echo "curl -fsSL URL | sudo bash"
+echo "Run as root"
 
-exit 1
-
-fi
-
-
-
-############################################
-# UBUNTU CHECK
-############################################
-
-
-UBUNTU_VERSION=$(lsb_release -rs)
-
-
-echo "Detected Ubuntu:"
-echo $UBUNTU_VERSION
-
-
-
-if [[ "$UBUNTU_VERSION" != "22.04" && "$UBUNTU_VERSION" != "24.04" ]]; then
-
-echo "Unsupported Ubuntu version"
+echo "sudo bash install.sh"
 
 exit 1
 
@@ -54,38 +33,34 @@ fi
 
 
 ############################################
-# CONFIGURATION
+# CONFIG
 ############################################
 
 
 CONTAINER_NAME="cloud9"
 
-PORT="8181"
+PORT="8000"
 
-CLOUD9_PORT="8000"
+INTERNAL_PORT="9000"
 
 WORKSPACE="/root/workspace"
 
 TIMEZONE="Asia/Jakarta"
 
 
+AUTH_USER="viper"
 
-# NGINX LOGIN
-
-AUTH_USERNAME="viper"
-
-AUTH_PASSWORD="viperzone123@"
+AUTH_PASS="viperzone123@"
 
 
 
 
 ############################################
-# UPDATE SYSTEM
+# SYSTEM UPDATE
 ############################################
 
 
-echo ""
-echo "[1/12] Updating system..."
+echo "[1/15] Updating system"
 
 
 apt update -y
@@ -96,61 +71,46 @@ apt upgrade -y
 
 
 ############################################
-# INSTALL DEPENDENCIES
+# BASIC PACKAGE
 ############################################
 
 
-echo ""
-echo "[2/12] Installing dependencies..."
+echo "[2/15] Installing packages"
 
 
 apt install -y \
+
 curl \
 wget \
 git \
 zip \
 unzip \
+nano \
+vim \
 openssl \
 ca-certificates \
-gnupg \
-lsb-release \
-ufw \
-iptables \
+nginx \
 apache2-utils \
-nginx
+ufw \
+software-properties-common
 
 
 
 
 ############################################
-# FIREWALL
+# DOCKER
 ############################################
 
 
-echo ""
-echo "[3/12] Configuring firewall..."
+echo "[3/15] Installing Docker"
 
-
-ufw allow ${PORT}/tcp || true
-
-iptables -I INPUT -p tcp --dport ${PORT} -j ACCEPT || true
-
-
-
-
-############################################
-# DOCKER INSTALL
-############################################
-
-
-echo ""
-echo "[4/12] Installing Docker..."
 
 
 if ! command -v docker >/dev/null 2>&1
+
 then
 
-curl -fsSL https://get.docker.com | sh
+curl -fsSL https://get.docker.com | bash
 
 fi
 
@@ -163,37 +123,30 @@ systemctl start docker
 
 
 
+
+############################################
+# FIREWALL
+############################################
+
+
+echo "[4/15] Firewall"
+
+
+ufw allow ${PORT}/tcp || true
+
+
+
+
 ############################################
 # WORKSPACE
 ############################################
 
 
-echo ""
-echo "[5/12] Creating workspace..."
+echo "[5/15] Workspace"
 
 
 mkdir -p ${WORKSPACE}
 
-
-
-
-############################################
-# CREATE NGINX LOGIN
-############################################
-
-
-echo ""
-echo "[6/12] Creating authentication..."
-
-
-mkdir -p /etc/nginx/auth
-
-
-
-htpasswd -bc \
-/etc/nginx/auth/cloud9.htpasswd \
-${AUTH_USERNAME} \
-${AUTH_PASSWORD}
 
 
 
@@ -203,8 +156,7 @@ ${AUTH_PASSWORD}
 ############################################
 
 
-echo ""
-echo "[7/12] Removing old Cloud9..."
+echo "[6/15] Cleaning old Cloud9"
 
 
 docker rm -f ${CONTAINER_NAME} >/dev/null 2>&1 || true
@@ -212,13 +164,14 @@ docker rm -f ${CONTAINER_NAME} >/dev/null 2>&1 || true
 
 
 
+
 ############################################
-# INSTALL CLOUD9
+# CLOUD9 CONTAINER
 ############################################
 
 
-echo ""
-echo "[8/12] Installing Cloud9 IDE..."
+echo "[7/15] Installing Cloud9"
+
 
 
 docker pull lscr.io/linuxserver/cloud9:latest
@@ -226,53 +179,63 @@ docker pull lscr.io/linuxserver/cloud9:latest
 
 
 docker run -d \
+
 --name ${CONTAINER_NAME} \
+
 -e PUID=0 \
+
 -e PGID=0 \
+
 -e TZ=${TIMEZONE} \
+
+-p 127.0.0.1:${INTERNAL_PORT}:8000 \
+
 -v ${WORKSPACE}:/code \
+
 --restart unless-stopped \
+
 lscr.io/linuxserver/cloud9:latest
 
 
 
 
-echo ""
-
-echo "Waiting Cloud9..."
-
-sleep 20
+sleep 15
 
 
-
-if ! docker ps | grep ${CONTAINER_NAME} >/dev/null
-
-then
-
-echo "Cloud9 failed"
-
-docker logs ${CONTAINER_NAME}
-
-exit 1
-
-fi
 
 
 
 
 ############################################
-# NGINX REVERSE PROXY
+# NGINX LOGIN
 ############################################
 
 
-echo ""
-echo "[9/12] Configuring Nginx Proxy..."
+echo "[8/15] Installing Login Protection"
+
+
+
+mkdir -p /etc/nginx/auth
+
+
+
+htpasswd -bc \
+
+/etc/nginx/auth/cloud9.htpasswd \
+
+${AUTH_USER} \
+
+${AUTH_PASS}
+
+
 
 
 
 cat > /etc/nginx/sites-available/cloud9 <<EOF
 
+
 server {
+
 
 listen ${PORT};
 
@@ -280,18 +243,23 @@ listen ${PORT};
 server_name _;
 
 
-location / {
-
 
 auth_basic "VIPER CLOUD9 LOGIN";
 
 auth_basic_user_file /etc/nginx/auth/cloud9.htpasswd;
 
 
-proxy_pass http://127.0.0.1:${CLOUD9_PORT};
+
+location / {
+
+
+
+proxy_pass http://127.0.0.1:${INTERNAL_PORT};
+
 
 
 proxy_http_version 1.1;
+
 
 
 proxy_set_header Upgrade \$http_upgrade;
@@ -299,15 +267,19 @@ proxy_set_header Upgrade \$http_upgrade;
 proxy_set_header Connection "upgrade";
 
 
+
 proxy_set_header Host \$host;
 
 proxy_set_header X-Real-IP \$remote_addr;
 
 
+
 proxy_read_timeout 86400;
 
 
+
 }
+
 
 }
 
@@ -315,12 +287,14 @@ EOF
 
 
 
+
 rm -f /etc/nginx/sites-enabled/default
 
 
-
 ln -sf \
+
 /etc/nginx/sites-available/cloud9 \
+
 /etc/nginx/sites-enabled/cloud9
 
 
@@ -330,25 +304,28 @@ nginx -t
 
 systemctl restart nginx
 
+
+
+
+
+
 ############################################
-# DEVELOPMENT TOOLS
+# DEV TOOLS
 ############################################
 
 
-echo ""
-echo "[10/12] Installing Development Tools..."
+echo "[9/15] Installing PHP Python Git"
 
 
 
 docker exec ${CONTAINER_NAME} bash -c "
-
-export DEBIAN_FRONTEND=noninteractive
 
 
 apt update -y
 
 
 apt install -y \
+
 php \
 php-cli \
 php-curl \
@@ -366,17 +343,21 @@ unzip \
 nano \
 vim
 
+
+
 "
 
 
 
+
+
+
 ############################################
-# NODE.JS 18 INSTALL
+# NODE JS 18
 ############################################
 
 
-echo ""
-echo "[11/12] Installing Node.js 18..."
+echo "[10/15] Installing Node.js 18"
 
 
 
@@ -387,8 +368,10 @@ cd /tmp
 
 
 
-curl -fsSL \
+curl -L \
+
 https://nodejs.org/dist/v18.20.8/node-v18.20.8-linux-x64.tar.xz \
+
 -o node.tar.xz
 
 
@@ -407,7 +390,9 @@ mv node-v18.20.8-linux-x64 /opt/nodejs
 
 ln -sf /opt/nodejs/bin/node /usr/local/bin/node
 
+
 ln -sf /opt/nodejs/bin/npm /usr/local/bin/npm
+
 
 ln -sf /opt/nodejs/bin/npx /usr/local/bin/npx
 
@@ -415,14 +400,19 @@ ln -sf /opt/nodejs/bin/npx /usr/local/bin/npx
 
 node -v
 
+
 npm -v
 
 
 
-rm -f node.tar.xz
+rm node.tar.xz
+
 
 
 "
+
+
+
 
 
 
@@ -432,27 +422,72 @@ rm -f node.tar.xz
 ############################################
 
 
-echo ""
-echo "[12/12] Installing Composer..."
+echo "[11/15] Installing Composer"
 
 
 
 docker exec ${CONTAINER_NAME} bash -c "
 
 
-php -r \"copy('https://getcomposer.org/installer','composer-setup.php');\"
+php -r \"copy('https://getcomposer.org/installer','composer.php');\"
 
 
+php composer.php \
 
-php composer-setup.php \
 --install-dir=/usr/local/bin \
+
 --filename=composer
 
 
 
-rm composer-setup.php
+rm composer.php
 
 
+
+composer --version
+
+
+
+"
+
+
+
+
+
+
+
+############################################
+# VERIFY
+############################################
+
+
+echo "[12/15] Checking Installation"
+
+
+
+docker exec ${CONTAINER_NAME} bash -c "
+
+echo PHP:
+
+php -v | head -1
+
+
+echo Node:
+
+node -v
+
+
+echo NPM:
+
+npm -v
+
+
+echo Python:
+
+python3 --version
+
+
+echo Composer:
 
 composer --version
 
@@ -463,9 +498,13 @@ composer --version
 
 
 
+
 ############################################
-# RESTART SERVICES
+# RESTART
 ############################################
+
+
+echo "[13/15] Restart Services"
 
 
 systemctl restart nginx
@@ -475,12 +514,18 @@ docker restart ${CONTAINER_NAME}
 
 
 
+
+
 ############################################
-# FINAL INFORMATION
+# FINAL
 ############################################
 
 
-SERVER_IP=$(curl -4 -s ifconfig.me || hostname -I | awk '{print $1}')
+echo "[14/15] Finalizing"
+
+
+IP=$(curl -4 -s ifconfig.me)
+
 
 
 
@@ -488,73 +533,68 @@ SERVER_IP=$(curl -4 -s ifconfig.me || hostname -I | awk '{print $1}')
 clear
 
 
+
 echo ""
 echo "=============================================="
-echo "       VIPER CLOUD9 INSTALL SUCCESS"
+echo "      VIPER CLOUD9 INSTALL SUCCESS"
 echo "=============================================="
-echo ""
-
-
-echo "Cloud9 URL:"
-echo ""
-
-echo "http://${SERVER_IP}:${PORT}"
-
 
 echo ""
 
-echo "=============================================="
+echo "URL:"
+echo ""
 
-echo "LOGIN INFORMATION"
+echo "http://${IP}:8000"
 
-echo "=============================================="
 
+
+echo ""
+
+echo "LOGIN"
 
 echo ""
 
 echo "Username:"
-echo "${AUTH_USERNAME}"
-
+echo "${AUTH_USER}"
 
 echo ""
 
 echo "Password:"
-echo "${AUTH_PASSWORD}"
+echo "${AUTH_PASS}"
 
 
 
 echo ""
-
-echo "=============================================="
-
 
 echo "Workspace:"
 echo "${WORKSPACE}"
 
 
-echo ""
-
-echo "Ubuntu:"
-echo "${UBUNTU_VERSION}"
-
 
 echo ""
 
-echo "Node:"
-echo "Node.js 18"
+echo "Installed:"
 
+echo "- Cloud9 IDE"
 
+echo "- PHP"
 
-echo ""
+echo "- Composer"
 
-echo "Container:"
-echo "${CONTAINER_NAME}"
+echo "- Node.js 18"
+
+echo "- NPM"
+
+echo "- Python3"
+
+echo "- Git"
+
 
 
 echo ""
 
 echo "=============================================="
 
-echo "       READY FOR DEVELOPMENT"
+echo "READY FOR DEVELOPMENT"
 
 echo "=============================================="
