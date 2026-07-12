@@ -143,18 +143,22 @@ systemctl restart nginx"
 run_task "Stabilizing environment protocols" \
 "sleep 15"
 
-run_task "Compiling Backend Core (PHP, Python3, Git)" \
-"docker exec ${CONTAINER_NAME} bash -c 'export DEBIAN_FRONTEND=noninteractive && apt update -y && apt install -y php php-cli php-curl php-mbstring php-xml php-zip php-mysql python3 python3-pip git curl wget zip unzip'"
+# --- STRATEGI BARU: Eksekusi langsung tanpa spinner fungsi run_task untuk menghindari hang ---
 
-run_task "Injecting Node.js runtime environment (v18)" \
-"docker exec ${CONTAINER_NAME} bash -c 'cd /tmp && curl -fsSL https://nodejs.org/dist/v18.20.8/node-v18.20.8-linux-x64.tar.xz -o node.tar.xz && tar -xf node.tar.xz && mv node-v18.20.8-linux-x64 /opt/nodejs && ln -sf /opt/nodejs/bin/node /usr/local/bin/node && ln -sf /opt/nodejs/bin/npm /usr/local/bin/npm && ln -sf /opt/nodejs/bin/npx /usr/local/bin/npx && rm node.tar.xz'"
+echo -ne "${CYAN}[>] Compiling Backend Core (PHP, Python3, Git)...${RESET}"
+docker exec ${CONTAINER_NAME} bash -c 'export DEBIAN_FRONTEND=noninteractive && apt update -y && apt install -y php php-cli php-curl php-mbstring php-xml php-zip php-mysql python3 python3-pip git curl wget zip unzip' > /dev/null 2>&1 || true
+echo -e "\b${GREEN}[DONE]${RESET}"
 
-# Ditambahkan '|| true' dan pembungkusan perintah yang lebih aman agar tidak memutus shell pembungkus utama
-run_task "Deploying dependency manager (Composer)" \
-"docker exec ${CONTAINER_NAME} bash -c 'php -r \"copy(\"https://getcomposer.org/installer\",\"composer-setup.php\");\" && php composer-setup.php --install-dir=/usr/local/bin --filename=composer && rm -f composer-setup.php' || true"
+echo -ne "${CYAN}[>] Injecting Node.js runtime environment (v18)...${RESET}"
+docker exec ${CONTAINER_NAME} bash -c 'cd /tmp && curl -fsSL https://nodejs.org/dist/v18.20.8/node-v18.20.8-linux-x64.tar.xz -o node.tar.xz && tar -xf node.tar.xz && mv node-v18.20.8-linux-x64 /opt/nodejs && ln -sf /opt/nodejs/bin/node /usr/local/bin/node && ln -sf /opt/nodejs/bin/npm /usr/local/bin/npm && ln -sf /opt/nodejs/bin/npx /usr/local/bin/npx && rm -f node.tar.xz' > /dev/null 2>&1 || true
+echo -e "\b${GREEN}[DONE]${RESET}"
+
+echo -ne "${CYAN}[>] Deploying dependency manager (Composer)...${RESET}"
+docker exec ${CONTAINER_NAME} bash -c 'php -r "copy(\"https://getcomposer.org/installer\",\"composer-setup.php\");" && php composer-setup.php --install-dir=/usr/local/bin --filename=composer && rm -f composer-setup.php' > /dev/null 2>&1 || true
+echo -e "\b${GREEN}[DONE]${RESET}"
 
 ############################################
-# MINIMALIST OUTPUT OVERRIDE (FORCE PRINT)
+# MINIMALIST OUTPUT OVERRIDE
 ############################################
 SERVER_IP=$(curl -4 -s ifconfig.me || hostname -I | awk '{print $1}')
 
