@@ -207,23 +207,44 @@ docker pull lscr.io/linuxserver/cloud9:latest
 
 
 
-docker run -d \
+docker rm -f cloud9 >/dev/null 2>&1 || true
 
---name $CLOUD9_CONTAINER \
 
--e PUID=0 \
 
--e PGID=0 \
-
--e TZ=$TIMEZONE \
-
--p 127.0.0.1:$CLOUD9_PORT:8000 \
-
--v $WORKSPACE:/code \
-
+docker run \
+--detach \
+--name cloud9 \
+--env PUID=0 \
+--env PGID=0 \
+--env TZ=Asia/Jakarta \
+--publish 127.0.0.1:8001:8000 \
+--volume /root/workspace:/code \
 --restart unless-stopped \
-
 lscr.io/linuxserver/cloud9:latest
+
+
+
+sleep 15
+
+
+
+echo "Checking Cloud9..."
+
+
+
+if ! docker ps | grep cloud9 >/dev/null
+then
+
+echo "Cloud9 failed"
+
+docker logs cloud9
+
+exit 1
+
+fi
+
+
+echo "Cloud9 running"
 
 
 
