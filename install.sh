@@ -1,411 +1,189 @@
 #!/bin/bash
 
+# Color Definitions
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+RESET='\033[0m'
+
 set -e
-
 export DEBIAN_FRONTEND=noninteractive
-
 clear
 
-echo "=============================================="
-echo "         VIPER CLOUD9 IDE INSTALLER"
-echo "         Ubuntu 22.04 / 24.04 Edition"
-echo "=============================================="
-echo ""
+# Function for animated loading indicator
+run_task() {
+    local message="$1"
+    local command="$2"
+    
+    echo -ne "${CYAN}[>] ${message}...${RESET}"
+    
+    # Run command silently in background
+    eval "$command" > /dev/null 2>&1 &
+    local pid=$!
+    
+    # Loading animation loops while command runs
+    local spin='-\|/'
+    local i=0
+    while kill -0 $pid 2>/dev/null; do
+        i=$(( (i+1) % 4 ))
+        echo -ne "\b${spin:$i:1}"
+        sleep 0.1
+    done
+    
+    # Check exit status
+    wait $pid
+    if [ $? -eq 0 ]; then
+        echo -e "\b${GREEN}[DONE]${RESET}"
+    else
+        echo -e "\b${RED}[FAILED]${RESET}"
+        exit 1
+    fi
+}
 
+echo -e "${GREEN}"
+echo "██╗   ██╗██╗██████╗ ███████╗██████╗     ███████╗ ██████╗ ███╗   ██╗███████╗"
+echo "██║   ██║██║██╔══██╗██╔════╝██╔══██╗    ╚══███╔╝██╔═══██╗████╗  ██║██╔════╝"
+echo "██║   ██║██║██████╔╝█████╗  ██████╔╝      ███╔╝ ██║   ██║██╔██╗ ██║█████╗  "
+echo "╚██╗ ██╔╝██║██╔═══╝ ██╔══╝  ██╔══██╗     ███╔╝  ██║   ██║██║╚██╗██║██╔══╝  "
+echo " ╚████╔╝ ██║██║     ███████╗██║  ██║    ███████╗╚██████╔╝██║ ╚████║███████╗"
+echo "  ╚═══╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝    ╚══════╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝"
+echo "=========================================================================="
+echo "                   CLOUD9 IDE - SYSTEM RECON & OVERRIDE                   "
+echo "=========================================================================="
+echo -e "${RESET}"
 
 ############################################
-# ROOT CHECK
+# ROOT & OS CHECK
 ############################################
-
 if [ "$EUID" -ne 0 ]; then
-    echo "ERROR: Please run this installer as root"
-    echo ""
-    echo "Example:"
-    echo "curl -fsSL URL | sudo bash"
+    echo -e "${RED}[!] ACCESS DENIED: Please escalate to root (sudo bash)${RESET}\n"
     exit 1
 fi
 
-
-
-############################################
-# DETECT UBUNTU
-############################################
-
-UBUNTU_VERSION=$(lsb_release -rs)
-
-echo "Detected Host Ubuntu: $UBUNTU_VERSION"
-
-
+UBUNTU_VERSION=$(lsb_release -rs 2>/dev/null || echo "Unknown")
 if [[ "$UBUNTU_VERSION" != "22.04" && "$UBUNTU_VERSION" != "24.04" ]]; then
-
-    echo ""
-    echo "ERROR: Unsupported Ubuntu version"
-    echo "Supported:"
-    echo "Ubuntu 22.04"
-    echo "Ubuntu 24.04"
+    echo -e "${RED}[!] ERROR: Target OS Architecture ($UBUNTU_VERSION) unsupported.${RESET}\n"
     exit 1
-
 fi
 
-
+echo -e "${GREEN}[+] Target System Identified: Ubuntu $UBUNTU_VERSION${RESET}"
+echo -e "${GREEN}[+] Initializing Payload Injection...${RESET}\n"
 
 ############################################
 # CONFIGURATION
 ############################################
-
 CONTAINER_NAME="cloud9"
 PORT="8181"
-INTERNAL_PORT="8182"  # Kontainer dipindah ke port internal agar tidak bisa di-bypass lewat IP langsung
+INTERNAL_PORT="8182"
 WORKSPACE="/root/workspace"
 TIMEZONE="Asia/Jakarta"
 
 CUSTOM_USER="admin"
 CUSTOM_PASS=$(openssl rand -base64 12)
 
-
-
 ############################################
-# CLEAN OLD REPOSITORY
+# EXECUTION MATRIX (SILENT RUN)
 ############################################
 
-echo ""
-echo "[1/12] Cleaning old repository..."
+run_task "Purging old core repositories" \
+"rm -f /etc/apt/sources.list.d/docker*.list /etc/apt/sources.list.d/nodesource.list && apt update -y"
 
+run_task "Synchronizing system packages" \
+"apt upgrade -y"
 
-rm -f /etc/apt/sources.list.d/docker.list
-rm -f /etc/apt/sources.list.d/docker-ce.list
-rm -f /etc/apt/sources.list.d/nodesource.list
+run_task "Injecting required network dependencies" \
+"apt install -y curl wget git zip unzip openssl ca-certificates gnupg lsb-release ufw iptables nginx apache2-utils"
 
+run_task "Bypassing firewall vectors (Port ${PORT})" \
+"ufw allow ${PORT}/tcp || true && iptables -I INPUT -p tcp --dport ${PORT} -j ACCEPT || true"
 
-apt update -y
+run_task "Deploying Docker Main Engine" \
+"if ! command -v docker >/dev/null 2>&1; then curl -fsSL https://get.docker.com | sh; fi && systemctl enable docker && systemctl start docker"
 
+run_task "Allocating secure environment space" \
+"mkdir -p ${WORKSPACE}"
 
+run_task "Terminating previous instances" \
+"docker rm -f ${CONTAINER_NAME} >/dev/null 2>&1 || true && rm -f /etc/nginx/sites-enabled/cloud9 /etc/nginx/sites-available/cloud9"
 
-############################################
-# UPDATE SYSTEM
-############################################
+run_task "Downloading fresh Cloud9 Binary Matrix" \
+"docker pull lscr.io/linuxserver/cloud9:latest"
 
-echo ""
-echo "[2/12] Updating system..."
+run_task "Spawning isolated sandbox container" \
+"docker run -d --name ${CONTAINER_NAME} -e PUID=0 -e PGID=0 -e TZ=${TIMEZONE} -p 127.0.0.1:${INTERNAL_PORT}:8000 -v ${WORKSPACE}:/code --restart unless-stopped lscr.io/linuxserver/cloud9:latest"
 
-
-apt upgrade -y
-
-
-
-############################################
-# BASIC PACKAGE & NGINX
-############################################
-
-echo ""
-echo "[3/12] Installing dependencies and Nginx..."
-
-
-apt install -y \
-curl \
-wget \
-git \
-zip \
-unzip \
-openssl \
-ca-certificates \
-gnupg \
-lsb-release \
-ufw \
-iptables \
-nginx \
-apache2-utils  # Dibutuhkan untuk perintah htpasswd
-
-
-
-############################################
-# FIREWALL
-############################################
-
-echo ""
-echo "[4/12] Opening port ${PORT}"
-
-
-ufw allow ${PORT}/tcp || true
-
-iptables -I INPUT -p tcp --dport ${PORT} -j ACCEPT || true
-
-
-
-############################################
-# DOCKER
-############################################
-
-echo ""
-echo "[5/12] Installing Docker..."
-
-
-if ! command -v docker >/dev/null 2>&1
-then
-
-curl -fsSL https://get.docker.com | sh
-
-fi
-
-
-systemctl enable docker
-systemctl start docker
-
-
-
-############################################
-# WORKSPACE
-############################################
-
-echo ""
-echo "[6/12] Creating workspace..."
-
-
-mkdir -p ${WORKSPACE}
-
-
-
-############################################
-# REMOVE OLD CLOUD9 & NGINX CONFIG
-############################################
-
-echo ""
-echo "[7/12] Removing old Cloud9 container and Nginx configs..."
-
-
-docker rm -f ${CONTAINER_NAME} >/dev/null 2>&1 || true
-rm -f /etc/nginx/sites-enabled/cloud9
-rm -f /etc/nginx/sites-available/cloud9
-
-
-
-############################################
-# INSTALL CLOUD9
-############################################
-
-echo ""
-echo "[8/12] Installing Cloud9 IDE..."
-
-
-docker pull lscr.io/linuxserver/cloud9:latest
-
-
-# Jalankan kontainer pada 127.0.0.1 agar tidak bisa diakses dari luar kecuali lewat Nginx
-docker run -d \
---name ${CONTAINER_NAME} \
--e PUID=0 \
--e PGID=0 \
--e TZ=${TIMEZONE} \
--p 127.0.0.1:${INTERNAL_PORT}:8000 \
--v ${WORKSPACE}:/code \
---restart unless-stopped \
-lscr.io/linuxserver/cloud9:latest
-
-
-
-############################################
-# CONFIGURING NGINX AUTH PROXY
-############################################
-
-echo ""
-echo "Configuring Nginx Reverse Proxy with Auth..."
-
-# Membuat file password untuk basic-auth Nginx
-mkdir -p /etc/nginx/auth
-htpasswd -b -c /etc/nginx/auth/.cloud9_htpasswd "${CUSTOM_USER}" "${CUSTOM_PASS}"
-
-# Membuat konfigurasi Virtual Host Nginx
+run_task "Locking down Gateway Proxy via Nginx" \
+"mkdir -p /etc/nginx/auth && \
+htpasswd -b -c /etc/nginx/auth/.cloud9_htpasswd '${CUSTOM_USER}' '${CUSTOM_PASS}' && \
 cat << 'EOF' > /etc/nginx/sites-available/cloud9
 server {
     listen NGINX_PORT;
     server_name _;
-
-    auth_basic "Restricted Access - Cloud9 IDE";
+    auth_basic \"Viper Zone - System Lockdown\";
     auth_basic_user_file /etc/nginx/auth/.cloud9_htpasswd;
-
     location / {
         proxy_pass http://127.0.0.1:INTERNAL_PORT;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # Dukungan WebSocket untuk terminal Cloud9
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \"upgrade\";
         proxy_read_timeout 86400;
     }
 }
 EOF
+sed -i 's/NGINX_PORT/'${PORT}'/g' /etc/nginx/sites-available/cloud9 && \
+sed -i 's/INTERNAL_PORT/'${INTERNAL_PORT}'/g' /etc/nginx/sites-available/cloud9 && \
+ln -sf /etc/nginx/sites-available/cloud9 /etc/nginx/sites-enabled/ && \
+systemctl restart nginx"
 
-# Mengganti placeholder port di dalam file Nginx
-sed -i "s/NGINX_PORT/${PORT}/g" /etc/nginx/sites-available/cloud9
-sed -i "s/INTERNAL_PORT/${INTERNAL_PORT}/g" /etc/nginx/sites-available/cloud9
+run_task "Stabilizing environment protocols" \
+"sleep 15"
 
-# Mengaktifkan konfigurasi dan merestart Nginx
-ln -s /etc/nginx/sites-available/cloud9 /etc/nginx/sites-enabled/
-systemctl restart nginx
+run_task "Compiling Backend Core (PHP, Python3, Git)" \
+"docker exec ${CONTAINER_NAME} bash -c 'export DEBIAN_FRONTEND=noninteractive && apt update -y && apt install -y php php-cli php-curl php-mbstring php-xml php-zip php-mysql python3 python3-pip git curl wget zip unzip'"
 
+run_task "Injecting Node.js runtime environment (v18)" \
+"docker exec ${CONTAINER_NAME} bash -c 'cd /tmp && curl -fsSL https://nodejs.org/dist/v18.20.8/node-v18.20.8-linux-x64.tar.xz -o node.tar.xz && tar -xf node.tar.xz && mv node-v18.20.8-linux-x64 /opt/nodejs && ln -sf /opt/nodejs/bin/node /usr/local/bin/node && ln -sf /opt/nodejs/bin/npm /usr/local/bin/npm && ln -sf /opt/nodejs/bin/npx /usr/local/bin/npx && rm node.tar.xz'"
 
-
-############################################
-# WAIT CLOUD9
-############################################
-
-echo ""
-echo "Waiting Cloud9 container..."
-
-
-sleep 20
-
-
-if ! docker ps | grep ${CONTAINER_NAME} >/dev/null
-then
-
-echo "Cloud9 failed to start"
-
-docker logs ${CONTAINER_NAME}
-
-exit 1
-
-fi
-
-
+run_task "Deploying dependency manager (Composer)" \
+"docker exec ${CONTAINER_NAME} bash -c 'php -r \"copy(\"https://getcomposer.org/installer\",\"composer-setup.php\");\" && php composer-setup.php --install-dir=/usr/local/bin --filename=composer && rm composer-setup.php'"
 
 ############################################
-# DEVELOPMENT TOOLS
+# TERMINAL REPORT OVERRIDE
 ############################################
-
-echo ""
-echo "[9/12] Installing PHP Python Git..."
-
-
-docker exec ${CONTAINER_NAME} bash -c "
-
-export DEBIAN_FRONTEND=noninteractive
-
-apt update -y
-
-apt install -y \
-php \
-php-cli \
-php-curl \
-php-mbstring \
-php-xml \
-php-zip \
-php-mysql \
-python3 \
-python3-pip \
-git \
-curl \
-wget \
-zip \
-unzip
-
-"
-
-
-
-############################################
-# NODE JS 18 BINARY INSTALL
-############################################
-
-echo ""
-echo "[10/12] Installing Node.js 18..."
-
-
-docker exec ${CONTAINER_NAME} bash -c "
-
-cd /tmp
-
-curl -fsSL https://nodejs.org/dist/v18.20.8/node-v18.20.8-linux-x64.tar.xz -o node.tar.xz
-
-tar -xf node.tar.xz
-
-mv node-v18.20.8-linux-x64 /opt/nodejs
-
-ln -sf /opt/nodejs/bin/node /usr/local/bin/node
-ln -sf /opt/nodejs/bin/npm /usr/local/bin/npm
-ln -sf /opt/nodejs/bin/npx /usr/local/bin/npx
-
-
-node -v
-
-npm -v
-
-rm node.tar.xz
-
-"
-
-
-
-############################################
-# COMPOSER
-############################################
-
-echo ""
-echo "[11/12] Installing Composer..."
-
-
-docker exec ${CONTAINER_NAME} bash -c "
-
-php -r \"copy('https://getcomposer.org/installer','composer-setup.php');\"
-
-php composer-setup.php \
---install-dir=/usr/local/bin \
---filename=composer
-
-rm composer-setup.php
-
-composer --version
-
-"
-
-
-
-############################################
-# FINAL
-############################################
-
-echo ""
-echo "[12/12] Finishing installation..."
-
-
 SERVER_IP=$(curl -4 -s ifconfig.me || hostname -I | awk '{print $1}')
 
+clear
+echo -e "${GREEN}"
+echo "██╗   ██╗██╗██████╗ ███████╗██████╗     ███████╗ ██████╗ ███╗   ██╗███████╗"
+echo "██║   ██║██║██╔══██╗██╔════╝██╔══██╗    ╚══███╔╝██╔═══██╗████╗  ██║██╔════╝"
+echo "██║   ██║██║██████╔╝█████╗  ██████╔╝      ███╔╝ ██║   ██║██╔██╗ ██║█████╗  "
+echo "╚██╗ ██╔╝██║██╔═══╝ ██╔══╝  ██╔══██╗     ███╔╝  ██║   ██║██║╚██╗██║██╔══╝  "
+echo " ╚████╔╝ ██║██║     ███████╗██║  ██║    ███████╗╚██████╔╝██║ ╚████║███████╗"
+echo "  ╚═══╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝    ╚══════╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝"
+echo "=========================================================================="
+echo "                    OVERRIDE COMPLETE - SYSTEM IS YOURS                   "
+echo "=========================================================================="
+echo -e "${RESET}"
 
-
+echo -e "${YELLOW}ACCESS GATEWAY:${RESET}"
+echo -e "${CYAN}URL      :${RESET} http://${SERVER_IP}:${PORT}"
 echo ""
-echo "=============================================="
-echo "        VIPER CLOUD9 INSTALL SUCCESS"
-echo "=============================================="
+echo -e "${YELLOW}SECURITY CREDENTIALS:${RESET}"
+echo -e "${CYAN}Username :${RESET} ${CUSTOM_USER}"
+echo -e "${CYAN}Password :${RESET} ${CUSTOM_PASS}"
 echo ""
-
-echo "Cloud9 URL:"
-echo "http://${SERVER_IP}:${PORT}"
-echo ""
-
-echo "Login Credentials (SYSTEM ENFORCED):"
-echo "Username : ${CUSTOM_USER}"
-echo "Password : ${CUSTOM_PASS}"
-echo ""
-
-echo "Workspace:"
-echo "${WORKSPACE}"
-echo ""
-
-echo "Host Ubuntu:"
-echo "${UBUNTU_VERSION}"
-echo ""
-
-echo "Node:"
-echo "Node.js 18"
-echo ""
-
-echo "Container:"
-echo "${CONTAINER_NAME}"
-echo ""
-echo "=============================================="
-echo "      READY FOR DEVELOPMENT"
-echo "=============================================="
+echo -e "${YELLOW}SYSTEM SPECIFICATIONS:${RESET}"
+echo -e "${CYAN}Workspace:${RESET} ${WORKSPACE}"
+echo -e "${CYAN}Host OS  :${RESET} Ubuntu ${UBUNTU_VERSION}"
+echo -e "${CYAN}Container:${RESET} ${CONTAINER_NAME} -> [Proxy Secured]"
+echo -e "${CYAN}Engine   :${RESET} PHP, Python3, Node.js 18, Composer"
+echo -e "${GREEN}"
+echo "=========================================================================="
+echo "                       WELCOME TO THE VIPER ZONE                          "
+echo "=========================================================================="
+echo -e "${RESET}"
