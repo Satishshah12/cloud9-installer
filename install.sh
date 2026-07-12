@@ -4,15 +4,13 @@ set -e
 
 export DEBIAN_FRONTEND=noninteractive
 
-
 clear
 
-
 echo "=============================================="
-echo "        VIPER CLOUD9 FULL INSTALLER"
-echo "        UBUNTU 24.04 DEVELOPMENT EDITION"
+echo "         VIPER CLOUD9 IDE INSTALLER"
+echo "         Ubuntu 22.04 / 24.04 Edition"
 echo "=============================================="
-
+echo ""
 
 
 ############################################
@@ -20,78 +18,67 @@ echo "=============================================="
 ############################################
 
 if [ "$EUID" -ne 0 ]; then
+    echo "ERROR: Please run this installer as root"
+    echo ""
+    echo "Example:"
+    echo "curl -fsSL URL | sudo bash"
+    exit 1
+fi
 
-echo "ERROR: Run as root"
 
-exit 1
+
+############################################
+# DETECT UBUNTU
+############################################
+
+UBUNTU_VERSION=$(lsb_release -rs)
+
+echo "Detected Host Ubuntu: $UBUNTU_VERSION"
+
+
+if [[ "$UBUNTU_VERSION" != "22.04" && "$UBUNTU_VERSION" != "24.04" ]]; then
+
+    echo ""
+    echo "ERROR: Unsupported Ubuntu version"
+    echo "Supported:"
+    echo "Ubuntu 22.04"
+    echo "Ubuntu 24.04"
+    exit 1
 
 fi
 
 
 
 ############################################
-# VARIABLES
+# CONFIGURATION
 ############################################
 
-
-CLOUD9_CONTAINER="cloud9"
-
-PUBLIC_PORT="8000"
-
-CLOUD9_PORT="8001"
-
+CONTAINER_NAME="cloud9"
+PORT="8181"
 WORKSPACE="/root/workspace"
-
 TIMEZONE="Asia/Jakarta"
 
-
-AUTH_USER="viper"
-
-AUTH_PASS="viperzone123@"
-
-
-
-############################################
-# UBUNTU CHECK
-############################################
-
-
-VERSION=$(lsb_release -rs)
-
-
-echo "Ubuntu Version: $VERSION"
-
-
-if [[ "$VERSION" != "24.04" ]]; then
-
-echo "Only Ubuntu 24.04 supported"
-
-exit 1
-
-fi
-
-
+# Silakan ganti username di bawah ini sesuai keinginan
+CUSTOM_USER="admin"
+# Password akan digenerate otomatis secara acak, atau ganti manual di sini jika ingin static
+CUSTOM_PASS=$(openssl rand -base64 12)
 
 
 
 ############################################
-# CLEAN OLD CONFIG
+# CLEAN OLD REPOSITORY
 ############################################
 
-
-echo "[1/16] Cleaning old configuration"
-
-
-
-rm -f /etc/nginx/sites-enabled/cloud9
-
-rm -f /etc/nginx/sites-available/cloud9
-
-rm -f /etc/nginx/cloud9.htpasswd
+echo ""
+echo "[1/12] Cleaning old repository..."
 
 
+rm -f /etc/apt/sources.list.d/docker.list
+rm -f /etc/apt/sources.list.d/docker-ce.list
+rm -f /etc/apt/sources.list.d/nodesource.list
 
-docker rm -f cloud9 >/dev/null 2>&1 || true
+
+apt update -y
 
 
 
@@ -99,423 +86,34 @@ docker rm -f cloud9 >/dev/null 2>&1 || true
 # UPDATE SYSTEM
 ############################################
 
+echo ""
+echo "[2/12] Updating system..."
 
-echo "[2/16] Updating system"
-
-
-
-apt update -y
 
 apt upgrade -y
 
 
 
-
 ############################################
-# INSTALL PACKAGE
-############################################
-
-
-echo "[3/16] Installing packages"
-
-
-PACKAGES="
-curl
-wget
-git
-zip
-unzip
-nano
-vim
-openssl
-ca-certificates
-nginx
-apache2-utils
-ufw
-python3
-python3-pip
-net-tools
-htop
-"
-
-
-for pkg in $PACKAGES
-do
-
-apt install -y $pkg
-
-done
-
-
-
-
-
-############################################
-# DOCKER
+# BASIC PACKAGE
 ############################################
 
-
-echo "[4/16] Installing Docker"
-
-
-
-if ! command -v docker >/dev/null
-
-then
-
-curl -fsSL https://get.docker.com | bash
-
-fi
-
-
-
-systemctl enable docker
-
-systemctl restart docker
-
-
-
-
-
-############################################
-# WORKSPACE
-############################################
-
-
-echo "[5/16] Creating workspace"
-
-
-
-mkdir -p $WORKSPACE
-
-chmod 777 $WORKSPACE
-
-
-
-
-
-############################################
-# CLOUD9 INSTALL
-############################################
-
-
-echo "[6/16] Installing Cloud9"
-
-
-
-docker pull lscr.io/linuxserver/cloud9:latest
-
-
-
-docker rm -f cloud9 >/dev/null 2>&1 || true
-
-
-
-docker run \
---detach \
---name cloud9 \
---env PUID=0 \
---env PGID=0 \
---env TZ=Asia/Jakarta \
---publish 127.0.0.1:8001:8000 \
---volume /root/workspace:/code \
---restart unless-stopped \
-lscr.io/linuxserver/cloud9:latest
-
-
-
-sleep 15
-
-
-
-echo "Checking Cloud9..."
-
-
-
-if ! docker ps | grep cloud9 >/dev/null
-then
-
-echo "Cloud9 failed"
-
-docker logs cloud9
-
-exit 1
-
-fi
-
-
-echo "Cloud9 running"
-
-
-
-
-
-############################################
-# WAIT CLOUD9
-############################################
-
-
-echo "Waiting Cloud9..."
-
-sleep 15
-
-
-
-if ! curl -I http://127.0.0.1:$CLOUD9_PORT >/dev/null 2>&1
-
-then
-
-
-echo "Cloud9 failed"
-
-docker logs cloud9
-
-exit 1
-
-
-fi
-
-
-
-
-
-############################################
-# PHP
-############################################
-
-
-echo "[7/16] Installing PHP 8.3"
-
+echo ""
+echo "[3/12] Installing dependencies..."
 
 
 apt install -y \
-
-php \
-
-php-cli \
-
-php-curl \
-
-php-mbstring \
-
-php-xml \
-
-php-zip \
-
-php-mysql
-
-
-
-php -v
-
-
-
-
-
-
-############################################
-# NODE JS
-############################################
-
-
-echo "[8/16] Installing Node.js 20"
-
-
-
-cd /tmp
-
-
-
-wget -q https://nodejs.org/dist/v20.19.3/node-v20.19.3-linux-x64.tar.xz
-
-
-
-tar -xf node-v20.19.3-linux-x64.tar.xz
-
-
-
-rm -rf /opt/node20
-
-
-
-mv node-v20.19.3-linux-x64 /opt/node20
-
-
-
-ln -sf /opt/node20/bin/node /usr/local/bin/node
-
-ln -sf /opt/node20/bin/npm /usr/local/bin/npm
-
-ln -sf /opt/node20/bin/npx /usr/local/bin/npx
-
-
-
-
-node -v
-
-npm -v
-
-
-
-
-
-############################################
-# COMPOSER
-############################################
-
-
-echo "[9/16] Installing Composer"
-
-
-
-php -r "copy('https://getcomposer.org/installer','composer.php');"
-
-
-
-php composer.php \
-
---install-dir=/usr/local/bin \
-
---filename=composer
-
-
-
-rm composer.php
-
-
-
-composer --version
-
-
-
-
-
-
-############################################
-# BASIC AUTH
-############################################
-
-
-echo "[10/16] Creating Login"
-
-
-
-htpasswd -bc \
-
-/etc/nginx/cloud9.htpasswd \
-
-$AUTH_USER \
-
-$AUTH_PASS
-
-
-
-
-
-############################################
-# NGINX CONFIG
-############################################
-
-
-echo "[11/16] Configuring Nginx"
-
-
-
-cat > /etc/nginx/sites-available/cloud9 <<EOF
-
-
-server {
-
-
-listen $PUBLIC_PORT;
-
-
-server_name _;
-
-
-
-auth_basic "VIPER CLOUD9 LOGIN";
-
-
-auth_basic_user_file /etc/nginx/cloud9.htpasswd;
-
-
-
-location / {
-
-
-proxy_pass http://127.0.0.1:$CLOUD9_PORT;
-
-
-
-proxy_http_version 1.1;
-
-
-
-proxy_set_header Upgrade \$http_upgrade;
-
-
-proxy_set_header Connection "upgrade";
-
-
-
-proxy_set_header Host \$host;
-
-
-proxy_set_header X-Real-IP \$remote_addr;
-
-
-proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-
-
-
-proxy_read_timeout 86400;
-
-
-
-}
-
-
-}
-
-EOF
-
-
-
-
-
-
-############################################
-# ENABLE NGINX
-############################################
-
-
-echo "[12/16] Enabling nginx"
-
-
-
-rm -f /etc/nginx/sites-enabled/default
-
-
-
-ln -sf \
-
-/etc/nginx/sites-available/cloud9 \
-
-/etc/nginx/sites-enabled/cloud9
-
-
-
-
-
-nginx -t
-
-
-
-systemctl restart nginx
-
-
-
+curl \
+wget \
+git \
+zip \
+unzip \
+openssl \
+ca-certificates \
+gnupg \
+lsb-release \
+ufw \
+iptables
 
 
 
@@ -523,51 +121,199 @@ systemctl restart nginx
 # FIREWALL
 ############################################
 
-
-echo "[13/16] Firewall"
-
-
-
-ufw allow ssh || true
-
-ufw allow $PUBLIC_PORT/tcp || true
+echo ""
+echo "[4/12] Opening port ${PORT}"
 
 
+ufw allow ${PORT}/tcp || true
 
+iptables -I INPUT -p tcp --dport ${PORT} -j ACCEPT || true
 
 
 
 ############################################
-# TEST
+# DOCKER
 ############################################
 
-
-echo "[14/16] Testing"
-
-
-
-systemctl status nginx --no-pager || true
+echo ""
+echo "[5/12] Installing Docker..."
 
 
+if ! command -v docker >/dev/null 2>&1
+then
 
-docker ps
+curl -fsSL https://get.docker.com | sh
+
+fi
 
 
+systemctl enable docker
+systemctl start docker
 
 
 
 ############################################
-# CLEAN
+# WORKSPACE
 ############################################
 
-
-echo "[15/16] Cleaning"
-
-
-
-rm -f /tmp/node-v20.19.3-linux-x64.tar.xz
+echo ""
+echo "[6/12] Creating workspace..."
 
 
+mkdir -p ${WORKSPACE}
+
+
+
+############################################
+# REMOVE OLD CLOUD9
+############################################
+
+echo ""
+echo "[7/12] Removing old Cloud9 container..."
+
+
+docker rm -f ${CONTAINER_NAME} >/dev/null 2>&1 || true
+
+
+
+############################################
+# INSTALL CLOUD9
+############################################
+
+echo ""
+echo "[8/12] Installing Cloud9 IDE..."
+
+
+docker pull lscr.io/linuxserver/cloud9:latest
+
+
+
+docker run -d \
+--name ${CONTAINER_NAME} \
+-e PUID=0 \
+-e PGID=0 \
+-e TZ=${TIMEZONE} \
+-e AUTH_USER=${CUSTOM_USER} \
+-e AUTH_PASS=${CUSTOM_PASS} \
+-p ${PORT}:8000 \
+-v ${WORKSPACE}:/code \
+--restart unless-stopped \
+lscr.io/linuxserver/cloud9:latest
+
+
+
+############################################
+# WAIT CLOUD9
+############################################
+
+echo ""
+echo "Waiting Cloud9 container..."
+
+
+sleep 20
+
+
+if ! docker ps | grep ${CONTAINER_NAME} >/dev/null
+then
+
+echo "Cloud9 failed to start"
+
+docker logs ${CONTAINER_NAME}
+
+exit 1
+
+fi
+
+
+
+############################################
+# DEVELOPMENT TOOLS
+############################################
+
+echo ""
+echo "[9/12] Installing PHP Python Git..."
+
+
+docker exec ${CONTAINER_NAME} bash -c "
+
+export DEBIAN_FRONTEND=noninteractive
+
+apt update -y
+
+apt install -y \
+php \
+php-cli \
+php-curl \
+php-mbstring \
+php-xml \
+php-zip \
+php-mysql \
+python3 \
+python3-pip \
+git \
+curl \
+wget \
+zip \
+unzip
+
+"
+
+
+
+############################################
+# NODE JS 18 BINARY INSTALL
+############################################
+
+echo ""
+echo "[10/12] Installing Node.js 18..."
+
+
+docker exec ${CONTAINER_NAME} bash -c "
+
+cd /tmp
+
+curl -fsSL https://nodejs.org/dist/v18.20.8/node-v18.20.8-linux-x64.tar.xz -o node.tar.xz
+
+tar -xf node.tar.xz
+
+mv node-v18.20.8-linux-x64 /opt/nodejs
+
+ln -sf /opt/nodejs/bin/node /usr/local/bin/node
+ln -sf /opt/nodejs/bin/npm /usr/local/bin/npm
+ln -sf /opt/nodejs/bin/npx /usr/local/bin/npx
+
+
+node -v
+
+npm -v
+
+rm node.tar.xz
+
+"
+
+
+
+############################################
+# COMPOSER
+############################################
+
+echo ""
+echo "[11/12] Installing Composer..."
+
+
+docker exec ${CONTAINER_NAME} bash -c "
+
+php -r \"copy('https://getcomposer.org/installer','composer-setup.php');\"
+
+php composer-setup.php \
+--install-dir=/usr/local/bin \
+--filename=composer
+
+rm composer-setup.php
+
+composer --version
+
+"
 
 
 
@@ -575,58 +321,44 @@ rm -f /tmp/node-v20.19.3-linux-x64.tar.xz
 # FINAL
 ############################################
 
+echo ""
+echo "[12/12] Finishing installation..."
 
-echo "[16/16] Finished"
 
-
-
-IP=$(curl -4 -s ifconfig.me)
+SERVER_IP=$(curl -4 -s ifconfig.me || hostname -I | awk '{print $1}')
 
 
 
 echo ""
-
 echo "=============================================="
-
-echo "     VIPER CLOUD9 INSTALL SUCCESS"
-
+echo "        VIPER CLOUD9 INSTALL SUCCESS"
 echo "=============================================="
-
 echo ""
 
-echo "URL"
-
-echo "http://$IP:$PUBLIC_PORT"
-
-
+echo "Cloud9 URL:"
+echo "http://${SERVER_IP}:${PORT}"
 echo ""
 
-echo "LOGIN"
-
-echo "Username : $AUTH_USER"
-
-echo "Password : $AUTH_PASS"
-
-
+echo "Login Credentials:"
+echo "Username : ${CUSTOM_USER}"
+echo "Password : ${CUSTOM_PASS}"
 echo ""
 
-echo "Cloud9 Backend"
-
-echo "127.0.0.1:$CLOUD9_PORT"
-
-
-
+echo "Workspace:"
+echo "${WORKSPACE}"
 echo ""
 
-echo "Workspace"
-
-echo "$WORKSPACE"
-
-
+echo "Host Ubuntu:"
+echo "${UBUNTU_VERSION}"
 echo ""
 
+echo "Node:"
+echo "Node.js 18"
+echo ""
+
+echo "Container:"
+echo "${CONTAINER_NAME}"
+echo ""
 echo "=============================================="
-
-echo "READY FOR DEVELOPMENT"
-
+echo "      READY FOR DEVELOPMENT"
 echo "=============================================="
