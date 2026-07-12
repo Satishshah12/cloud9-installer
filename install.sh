@@ -71,7 +71,7 @@ echo -e "${GREEN}[+] Target System Identified: Ubuntu $UBUNTU_VERSION${RESET}"
 echo -e "${GREEN}[+] Initializing Payload Injection...${RESET}\n"
 
 ############################################
-# CONFIGURATION
+# CONFIGURATION (DEFAULT CREDENTIALS LOCKED)
 ############################################
 CONTAINER_NAME="cloud9"
 PORT="8181"
@@ -79,8 +79,8 @@ INTERNAL_PORT="8182"
 WORKSPACE="/root/workspace"
 TIMEZONE="Asia/Jakarta"
 
-CUSTOM_USER="admin"
-CUSTOM_PASS=$(openssl rand -base64 12)
+CUSTOM_USER="Viper"
+CUSTOM_PASS="viperzone99!"
 
 ############################################
 # EXECUTION MATRIX (SILENT RUN)
@@ -143,7 +143,7 @@ systemctl restart nginx"
 run_task "Stabilizing environment protocols" \
 "sleep 15"
 
-# --- STRATEGI BARU: Eksekusi langsung tanpa spinner fungsi run_task untuk menghindari hang ---
+# --- DIRECT EXECUTION (ANTI-HANG) ---
 
 echo -ne "${CYAN}[>] Compiling Backend Core (PHP, Python3, Git)...${RESET}"
 docker exec ${CONTAINER_NAME} bash -c 'export DEBIAN_FRONTEND=noninteractive && apt update -y && apt install -y php php-cli php-curl php-mbstring php-xml php-zip php-mysql python3 python3-pip git curl wget zip unzip' > /dev/null 2>&1 || true
@@ -158,13 +158,25 @@ docker exec ${CONTAINER_NAME} bash -c 'php -r "copy(\"https://getcomposer.org/in
 echo -e "\b${GREEN}[DONE]${RESET}"
 
 ############################################
-# MINIMALIST OUTPUT OVERRIDE
+# HACKER STYLE OUTPUT OVERRIDE (CUSTOM)
 ############################################
 SERVER_IP=$(curl -4 -s ifconfig.me || hostname -I | awk '{print $1}')
 
 clear
-echo -e "${GREEN}DONE${RESET}"
-echo -e "${GREEN}URL      : http://${SERVER_IP}:${PORT}${RESET}"
-echo -e "${GREEN}Username : ${CUSTOM_USER}${RESET}"
-echo -e "${GREEN}Pass     : ${CUSTOM_PASS}${RESET}"
+echo -e "${GREEN}"
+echo "/////////////////////////////DONE/////////////////////////"
+echo "██╗   ██╗██╗██████╗ ███████╗██████╗     ███████╗ ██████╗ ███╗   ██╗███████╗"
+echo "██║   ██║██║██╔══██╗██╔════╝██╔══██╗    ╚══███╔╝██╔═══██╗████╗  ██║██╔════╝"
+echo "██║   ██║██║██████╔╝█████╗  ██████╔╝      ███╔╝ ██║   ██║██╔██╗ ██║█████╗  "
+echo "╚██╗ ██╔╝██║██╔═══╝ ██╔══╝  ██╔══██╗     ███╔╝  ██║   ██║██║╚██╗██║██╔══╝  "
+echo " ╚████╔╝ ██║██║     ███████╗██║  ██║    ███████╗╚██████╔╝██║ ╚████║███████╗"
+echo "  ╚═══╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝    ╚══════╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝"
+echo "                 VIPER ZONE CLOUD IDE DEPLOYED                 "
+echo "///////////////////////////////////////////////////////////"
+echo ""
+echo -e "${YELLOW}  [+] URL      : http://${SERVER_IP}:${PORT}"
+echo -e "${YELLOW}  [+] Username : ${CUSTOM_USER}"
+echo -e "${YELLOW}  [+] Password : ${CUSTOM_PASS}"
+echo ""
+echo -e "${GREEN}////////////////////////////THANKS//////////////////////${RESET}"
 echo ""
