@@ -82,6 +82,9 @@ TIMEZONE="Asia/Jakarta"
 CUSTOM_USER="admin"
 CUSTOM_PASS=$(openssl rand -base64 12)
 
+# Emergency Backup
+echo -e "User: ${CUSTOM_USER}\nPass: ${CUSTOM_PASS}" > /root/c9_access_backup.txt
+
 ############################################
 # EXECUTION MATRIX (SILENT RUN)
 ############################################
@@ -153,37 +156,15 @@ run_task "Deploying dependency manager (Composer)" \
 "docker exec ${CONTAINER_NAME} bash -c 'php -r \"copy(\"https://getcomposer.org/installer\",\"composer-setup.php\");\" && php composer-setup.php --install-dir=/usr/local/bin --filename=composer && rm composer-setup.php'"
 
 ############################################
-# TERMINAL REPORT OVERRIDE
+# MINIMALIST OUTPUT OVERRIDE
 ############################################
 SERVER_IP=$(curl -4 -s ifconfig.me || hostname -I | awk '{print $1}')
 
-clear
-echo -e "${GREEN}"
-echo "██╗   ██╗██╗██████╗ ███████╗██████╗     ███████╗ ██████╗ ███╗   ██╗███████╗"
-echo "██║   ██║██║██╔══██╗██╔════╝██╔══██╗    ╚══███╔╝██╔═══██╗████╗  ██║██╔════╝"
-echo "██║   ██║██║██████╔╝█████╗  ██████╔╝      ███╔╝ ██║   ██║██╔██╗ ██║█████╗  "
-echo "╚██╗ ██╔╝██║██╔═══╝ ██╔══╝  ██╔══██╗     ███╔╝  ██║   ██║██║╚██╗██║██╔══╝  "
-echo " ╚████╔╝ ██║██║     ███████╗██║  ██║    ███████╗╚██████╔╝██║ ╚████║███████╗"
-echo "  ╚═══╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝    ╚══════╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝"
-echo "=========================================================================="
-echo "                    OVERRIDE COMPLETE - SYSTEM IS YOURS                   "
-echo "=========================================================================="
-echo -e "${RESET}"
+# Hapus backup darurat karena proses berhasil 100%
+rm -f /root/c9_access_backup.txt
 
-echo -e "${YELLOW}ACCESS GATEWAY:${RESET}"
-echo -e "${CYAN}URL      :${RESET} http://${SERVER_IP}:${PORT}"
-echo ""
-echo -e "${YELLOW}SECURITY CREDENTIALS:${RESET}"
-echo -e "${CYAN}Username :${RESET} ${CUSTOM_USER}"
-echo -e "${CYAN}Password :${RESET} ${CUSTOM_PASS}"
-echo ""
-echo -e "${YELLOW}SYSTEM SPECIFICATIONS:${RESET}"
-echo -e "${CYAN}Workspace:${RESET} ${WORKSPACE}"
-echo -e "${CYAN}Host OS  :${RESET} Ubuntu ${UBUNTU_VERSION}"
-echo -e "${CYAN}Container:${RESET} ${CONTAINER_NAME} -> [Proxy Secured]"
-echo -e "${CYAN}Engine   :${RESET} PHP, Python3, Node.js 18, Composer"
-echo -e "${GREEN}"
-echo "=========================================================================="
-echo "                       WELCOME TO THE VIPER ZONE                          "
-echo "=========================================================================="
-echo -e "${RESET}"
+clear
+echo -e "${GREEN}DONE${RESET}"
+echo -e "${GREEN}URL      : http://${SERVER_IP}:${PORT}${RESET}"
+echo -e "${GREEN}Username : ${CUSTOM_USER}${RESET}"
+echo -e "${GREEN}Pass     : ${CUSTOM_PASS}${RESET}"
